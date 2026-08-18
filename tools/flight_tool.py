@@ -12,7 +12,7 @@ os.environ["SSL_CERT_FILE"]=certifi.where()
 os.environ["REQUESTS_CA_BUNDLE"]=certifi.where()
 
 API_KEY=os.getenv("AVIATIONSTACK_API_KEY")
-DEFAULT_ORIGIN_DATA=os.getenv("DEFAULT_ORIGIN_DATA","DEL")
+DEFAULT_ORIGIN_IATA=os.getenv("DEFAULT_ORIGIN_IATA","DEL")
 
 
 BASE_URL="https://api.aviationstack.com/v1/flights"
