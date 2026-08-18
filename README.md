@@ -18,22 +18,37 @@ graph LR
     FA -->|flight_results| HA[Hotel Agent]
     HA -->|hotel_results| IA[Itinerary Agent]
     IA -->|itinerary| FN[Final Response Agent]
-    FN --> END([Formatted response])
+    FN --> APPROVE{User approves plan?}
+    APPROVE -->|yes| BA[Booking Agent]
+    APPROVE -->|no / edits| IA
+    BA --> PAY{Payment step}
+    PAY -->|awaiting user| HOLD([Paused - needs human action])
+    PAY -->|user confirms payment| END([Booking confirmed])
 
     FA -.-> FT[(Flight Tool)]
     HA -.-> TT[(Tavily Search)]
     IA -.-> LLM[(Groq LLM)]
     FN -.-> LLM
+    BA -.-> FT
+    BA -.-> HT[(Hotel Booking Tool)]
 ```
 
 | Agent | Responsibility |
 |---|---|
-| **Flight Agent** | Parses the query and pulls flight options via a dedicated flight-search tool |
+| **Flight Agent** | Parses the query and pulls flight options via AviationStack |
 | **Hotel Agent** | Runs a Tavily web search for hotels matching the destination + query |
 | **Itinerary Agent** | Feeds flight + hotel context into the LLM to draft a practical, budget-aware itinerary |
 | **Final Response Agent** | Formats everything into a clean, sectioned answer (summary → flights → hotels → day-by-day plan → budget → recommendations) |
+| **Booking Agent** | Only runs after explicit user approval of the plan. Reserves the chosen flight and hotel through their respective APIs, but **halts before payment** — the graph interrupts and hands control back to the user for that step, so no charge is ever made autonomously |
 
-State is tracked via a `TypedDict` (`TravelState`) carrying `messages`, `user_query`, `flight_results`, `hotel_results`, `itinerary`, and an `llm_calls` counter — handy for cost/latency debugging.
+State is tracked via a `TypedDict` (`TravelState`) carrying `messages`, `user_query`, `flight_results`, `hotel_results`, `itinerary`, `booking_status`, and an `llm_calls` counter — handy for cost/latency debugging.
+
+### Approval and payment gating
+
+The Booking Agent is intentionally split into two phases so an LLM can never move money on its own:
+
+1. **Reservation phase** — once the user approves the itinerary, the agent holds/reserves flight seats and hotel rooms where the provider supports it (or prepares the exact booking payload if it doesn't).
+2. **Payment phase** — the graph hits a hard `interrupt()` here. Execution pauses and the API returns a `pending_payment` status with the booking summary; nothing is charged until the user hits a separate "confirm payment" action, which resumes the graph with their explicit go-ahead.
 
 ---
 
@@ -122,6 +137,8 @@ docker run -p 8000:8000 --env-file .env tripora
 |---|---|---|
 | `GET` | `/` | Chat UI (Jinja2) |
 | `POST` | `/api/travel` | Runs the agent graph on a message; accepts `{ "message": str, "thread_id": str \| null }` |
+| `POST` | `/api/travel/approve` | Confirms the drafted itinerary and triggers the Booking Agent's reservation phase; accepts `{ "thread_id": str }` |
+| `POST` | `/api/travel/confirm-payment` | Resumes the interrupted graph and completes the booking after the user explicitly confirms payment; accepts `{ "thread_id": str }` |
 | `GET` | `/health` | Liveness check |
 
 **Sample request:**
@@ -154,8 +171,8 @@ Pass the same `thread_id` back in a follow-up request to continue planning withi
 
 - [ ] Streaming responses (SSE/WebSocket) instead of blocking `POST /api/travel`
 - [ ] Real ticket pricing (current flight tool surfaces availability, not always live fares)
-- [ ] Human-in-the-loop confirmation before finalizing itinerary
 - [ ] Multi-city trip support
+- [ ] Booking cancellation / modification flow after payment confirmation
 
 ---
 
