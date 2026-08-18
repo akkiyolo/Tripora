@@ -1,14 +1,14 @@
 from pathlib import Path
 import traceback
-import uvicorn
 
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from backend import run_travel_agent
+from backend import run_travel_agent, approve_travel_plan, confirm_payment
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -18,24 +18,29 @@ app = FastAPI(
     version="1.0.0"
 )
 
-
 app.mount(
     "/static",
     StaticFiles(directory=str(BASE_DIR / "static")),
     name="static"
 )
 
-
 templates = Jinja2Templates(
     directory=str(BASE_DIR / "templates")
 )
-
 
 
 class TravelRequest(BaseModel):
     message: str
     thread_id: str | None = None
 
+
+class ApproveRequest(BaseModel):
+    thread_id: str
+
+
+class ConfirmPaymentRequest(BaseModel):
+    thread_id: str
+    confirm: bool
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -81,7 +86,6 @@ async def travel_planner(request_data: TravelRequest):
     except Exception as e:
         print("ERROR:", e)
         traceback.print_exc()
-
         return JSONResponse(
             status_code=500,
             content={
@@ -90,6 +94,78 @@ async def travel_planner(request_data: TravelRequest):
             }
         )
 
+
+@app.post("/api/travel/approve")
+async def approve_plan(request_data: ApproveRequest):
+    """
+    Called when the user approves the drafted itinerary. Kicks off
+    reservation of the flight/hotel and returns a booking summary
+    for the user to review before paying. Nothing is charged here.
+    """
+    try:
+        result = approve_travel_plan(thread_id=request_data.thread_id)
+
+        return JSONResponse(
+            content={
+                "success": True,
+                "thread_id": result["thread_id"],
+                "status": result["status"],
+                "booking_summary": result["booking_summary"],
+            }
+        )
+
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": str(e)
+            }
+        )
+    except Exception as e:
+        print("ERROR:", e)
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e)
+            }
+        )
+
+
+@app.post("/api/travel/confirm-payment")
+async def confirm_payment_endpoint(request_data: ConfirmPaymentRequest):
+    """
+    The only endpoint that can move a booking past payment. Requires
+    an explicit confirm=True from the user; confirm=False cancels the
+    booking instead of charging anything.
+    """
+    try:
+        result = confirm_payment(
+            thread_id=request_data.thread_id,
+            confirm=request_data.confirm
+        )
+
+        return JSONResponse(
+            content={
+                "success": True,
+                "thread_id": result["thread_id"],
+                "booking_status": result["booking_status"],
+                "message": result["message"],
+            }
+        )
+
+    except Exception as e:
+        print("ERROR:", e)
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e)
+            }
+        )
 
 
 @app.get("/health")
@@ -103,7 +179,6 @@ async def health_check():
 @app.get("/favicon.ico")
 async def favicon():
     return JSONResponse(content={})
-
 
 
 if __name__ == "__main__":
