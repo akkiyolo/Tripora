@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="description"
+        content="Tripora — AI-powered travel planning with flights, hotels and personalized itineraries."
+    >
+
+    <title>Tripora — AI Travel Planner</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+    <!-- =========================================================
+         NAVBAR
+    ========================================================== -->
+
+    <header class="navbar">
+        <div class="nav-inner">
+
+            <a href="/" class="brand">
+                <span class="brand-mark">T</span>
+
+                <span class="brand-name">
+                    Tripora
+                </span>
+            </a>
+
+            <div class="nav-right">
+
+                <div class="system-status">
+                    <span class="status-indicator"></span>
+                    <span>Systems operational</span>
+                </div>
+
+                <button
+                    class="new-trip-btn"
+                    id="newTripBtn"
+                    type="button"
+                >
+                    + New trip
+                </button>
+
+            </div>
+
+        </div>
+    </header>
+
+
+    <!-- =========================================================
+         MAIN
+    ========================================================== -->
+
+    <main class="main-container">
+
+        <!-- HERO -->
+
+        <section class="hero">
+
+            <div class="hero-copy">
+
+                <p class="eyebrow">
+                    AI TRAVEL PLANNER
+                </p>
+
+                <h1>
+                    Go somewhere
+                    <span>worth remembering.</span>
+                </h1>
+
+                <p class="hero-description">
+                    Tell Tripora where you want to go, how long you have,
+                    and what you want to spend. Our travel agents handle
+                    the rest.
+                </p>
+
+            </div>
+
+            <div class="hero-stamp">
+                <span class="stamp-top">PLAN</span>
+                <span class="stamp-middle">TRAVEL</span>
+                <span class="stamp-bottom">BETTER</span>
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             PLANNER
+        ====================================================== -->
+
+        <section class="planner-wrapper">
+
+            <div class="planner-card">
+
+                <div class="planner-top">
+
+                    <div>
+                        <span class="section-number">01</span>
+
+                        <h2>
+                            Tell us about your trip
+                        </h2>
+                    </div>
+
+                    <div class="planner-note">
+                        No forms. Just describe it naturally.
+                    </div>
+
+                </div>
+
+
+                <div class="input-wrapper">
+
+                    <textarea
+                        id="userInput"
+                        maxlength="2000"
+                        placeholder="I'm thinking about Japan for 7 days in April. Flying from Delhi, around ₹1.5 lakh total. I want good food, Tokyo nightlife and a day trip to Mount Fuji..."
+                        aria-label="Describe your travel plans"
+                    ></textarea>
+
+                    <div class="input-footer">
+
+                        <span id="charCount">
+                            0 / 2000
+                        </span>
+
+                        <button
+                            id="sendBtn"
+                            type="button"
+                            onclick="sendMessage()"
+                        >
+                            <span id="btnText">
+                                Build my trip
+                            </span>
+
+                            <span
+                                id="btnLoader"
+                                class="loader hidden"
+                            ></span>
+
+                            <span
+                                id="btnArrow"
+                                class="btn-arrow"
+                            >
+                                →
+                            </span>
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <!-- QUICK IDEAS -->
+
+                <div class="ideas-section">
+
+                    <span class="ideas-label">
+                        NEED AN IDEA?
+                    </span>
+
+                    <div class="idea-list">
+
+                        <button
+                            class="idea-chip"
+                            onclick="setPrompt('Plan a 7 day Japan trip from Delhi under ₹1.5 lakh including flights, hotels, food and sightseeing.')"
+                        >
+                            <span>Japan</span>
+                            <small>7 days</small>
+                        </button>
+
+                        <button
+                            class="idea-chip"
+                            onclick="setPrompt('Plan a 5 day Dubai trip from Delhi including flights, a comfortable hotel, desert safari and major attractions.')"
+                        >
+                            <span>Dubai</span>
+                            <small>5 days</small>
+                        </button>
+
+                        <button
+                            class="idea-chip"
+                            onclick="setPrompt('Plan a 7 day Thailand trip from India with budget hotels, beaches, food and sightseeing.')"
+                        >
+                            <span>Thailand</span>
+                            <small>7 days</small>
+                        </button>
+
+                        <button
+                            class="idea-chip"
+                            onclick="setPrompt('Find flight information and travel options for popular international destinations from India.')"
+                        >
+                            <span>Flights</span>
+                            <small>Explore</small>
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- PROCESSING INFO -->
+
+            <div
+                class="processing-card hidden"
+                id="processingCard"
+            >
+
+                <div class="processing-icon">
+                    <span class="processing-dot"></span>
+                </div>
+
+                <div class="processing-content">
+
+                    <strong>
+                        Building your itinerary
+                    </strong>
+
+                    <span id="processingText">
+                        Searching for the best options...
+                    </span>
+
+                </div>
+
+                <div class="processing-line">
+                    <span></span>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             RESULT
+        ====================================================== -->
+
+        <section
+            id="resultSection"
+            class="result-section hidden"
+        >
+
+            <div class="result-top">
+
+                <div class="result-heading">
+
+                    <span class="section-number">
+                        02
+                    </span>
+
+                    <div>
+
+                        <p class="result-kicker">
+                            YOUR PERSONAL ITINERARY
+                        </p>
+
+                        <h2>
+                            Your trip is ready.
+                        </h2>
+
+                    </div>
+
+                </div>
+
+
+                <div class="result-actions">
+
+                    <button
+                        class="secondary-btn"
+                        onclick="copyResult()"
+                        type="button"
+                    >
+                        <span>Copy</span>
+                    </button>
+
+                    <button
+                        class="primary-small-btn"
+                        onclick="downloadPDF()"
+                        type="button"
+                    >
+                        <span>Download PDF</span>
+                        <span>↓</span>
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="trip-meta">
+
+                <div class="meta-item">
+
+                    <span class="meta-label">
+                        SESSION
+                    </span>
+
+                    <span
+                        id="threadInfo"
+                        class="meta-value"
+                    >
+                        -
+                    </span>
+
+                </div>
+
+                <div class="meta-divider"></div>
+
+                <div class="meta-item">
+
+                    <span class="meta-label">
+                        CREATED WITH
+                    </span>
+
+                    <span class="meta-value">
+                        Tripora AI
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- PDF CONTENT -->
+
+            <div
+                id="pdfContent"
+                class="pdf-content"
+            >
+
+                <div class="pdf-header">
+
+                    <div class="pdf-brand">
+                        TRIPORA
+                    </div>
+
+                    <div class="pdf-document-label">
+                        PERSONAL TRAVEL PLAN
+                    </div>
+
+                </div>
+
+                <h1 class="pdf-title">
+                    Your AI Travel Plan
+                </h1>
+
+                <div
+                    id="resultBox"
+                    class="result-box"
+                ></div>
+
+                <div class="pdf-footer">
+                    Planned with Tripora
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ERROR -->
+
+        <section
+            id="errorBox"
+            class="error-box hidden"
+        ></section>
+
+    </main>
+
+
+    <!-- =========================================================
+         FOOTER
+    ========================================================== -->
+
+    <footer class="site-footer">
+
+        <div class="footer-inner">
+
+            <div class="footer-brand">
+                <span class="footer-mark">T</span>
+
+                <span>
+                    Tripora
+                </span>
+            </div>
+
+            <p>
+                Multi-agent travel planning, powered by LangGraph.
+            </p>
+
+            <div class="footer-stack">
+                FastAPI · LangGraph · Groq · PostgreSQL
+            </div>
+
+        </div>
+
+    </footer>
+
+
+    <!-- =========================================================
+         LIBRARIES
+    ========================================================== -->
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script src="/static/script.js"></script>
+
+</body>
+</html>
