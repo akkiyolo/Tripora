@@ -42,8 +42,9 @@ State is tracked via a `TypedDict` (`TravelState`) carrying `messages`, `user_qu
 - **Orchestration:** LangGraph (`StateGraph`) with a `PostgresSaver` checkpointer for cross-turn memory
 - **LLM:** Groq (`qwen/qwen3.6-27b` via `langchain-groq`)
 - **Backend:** FastAPI + Jinja2 templates, served with Uvicorn
-- **Search/Tools:** Tavily API (hotels/web research), custom flight-search tool (`airportsdata`, `pycountry` for IATA/country normalization)
+- **Search/Tools:** Tavily API (hotels/web research), AviationStack API for live flight data (`airportsdata`, `pycountry` for IATA/country normalization)
 - **Persistence:** PostgreSQL (thread-level conversation checkpointing)
+- **Observability:** LangSmith tracing
 - **Deployment:** Docker, hosted on Render
 
 ---
@@ -81,9 +82,17 @@ pip install -r requirements.txt
 Create a `.env` in the project root:
 
 ```env
+DATABASE_URL=your_postgresql_connection_string      # e.g. Render Postgres
+DEFAULT_ORIGIN_IATA=DEL                              # fallback origin airport for flight search
+AVIATIONSTACK_API_KEY=your_aviationstack_api_key
 GROQ_API_KEY=your_groq_api_key
-DATABASE_URL=your_postgresql_connection_string   # e.g. Render Postgres
 TAVILY_API_KEY=your_tavily_api_key
+
+# Optional — LangSmith tracing
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=your_langsmith_endpoint
+LANGSMITH_API_KEY=your_langsmith_api_key
+LANGSMITH_PROJECT=Tripora
 ```
 
 > `DATABASE_URL` powers the LangGraph checkpointer — this is what gives the agent conversation memory (`thread_id`-scoped). `sslmode=require` is auto-appended if missing.
@@ -145,7 +154,6 @@ Pass the same `thread_id` back in a follow-up request to continue planning withi
 
 - [ ] Streaming responses (SSE/WebSocket) instead of blocking `POST /api/travel`
 - [ ] Real ticket pricing (current flight tool surfaces availability, not always live fares)
-- [ ] LangSmith tracing for agent-level observability
 - [ ] Human-in-the-loop confirmation before finalizing itinerary
 - [ ] Multi-city trip support
 
