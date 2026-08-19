@@ -1,10 +1,9 @@
-import os 
+import os
 import certifi
 from dotenv import load_dotenv
-from psycopg_pool import ConnectionPool
+from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
-from langgraph.checkpoint.postgres import PostgresSaver
-import asyncio
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 load_dotenv()
 
@@ -15,11 +14,7 @@ from typing import TypedDict, Annotated
 import operator
 import uuid
 
-import psycopg
-from psycopg.rows import dict_row
-
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.postgres import PostgresSaver
 from langchain_core.messages import (
     AnyMessage,
     HumanMessage,
@@ -27,9 +22,9 @@ from langchain_core.messages import (
     SystemMessage,
 )
 from langchain_groq import ChatGroq
-#from tools.tavily_tool import tavily_search
 from tools.flight_tool import search_flights
 from mcp_client_test import tavily_mcp_search
+
 
 def get_database_url():
     database_url = os.getenv("DATABASE_URL")
@@ -44,6 +39,7 @@ def get_database_url():
         database_url = f"{database_url}{separator}sslmode=require"
 
     return database_url
+
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
@@ -90,15 +86,14 @@ def flight_agent(state: TravelState):
     }
 
 
-
 # =========================
 # Hotel Agent
 # =========================
 
-def hotel_agent(state: TravelState):
+async def hotel_agent(state: TravelState):
     query = f"Best hotels for {state['user_query']}"
-    #hotel_results = tavily_search(query)
-    hotel_results=asyncio.run(tavily_mcp_search(query))
+
+    hotel_results = await tavily_mcp_search(query)
 
     return {
         "hotel_results": hotel_results,
@@ -107,8 +102,6 @@ def hotel_agent(state: TravelState):
         ],
         "llm_calls": state.get("llm_calls", 0) + 1
     }
-
-
 
 
 # =========================
@@ -141,7 +134,6 @@ Make the itinerary practical, budget-aware, and easy to follow.
         "messages": [response],
         "llm_calls": state.get("llm_calls", 0) + 1
     }
-
 
 
 # =========================
@@ -191,7 +183,7 @@ Important:
 
 
 # =========================
-# Build Graph
+# Build Graph (structure only — no checkpointer yet)
 # =========================
 
 graph = StateGraph(TravelState)
@@ -209,31 +201,59 @@ graph.add_edge("final_agent", END)
 
 
 # =========================
-# PostgreSQL Checkpointer
+# Async Postgres Checkpointer — initialized lazily
 # =========================
+# AsyncPostgresSaver / AsyncConnectionPool both need a running event loop,
+# so they CANNOT be created at import time (module load happens before
+# uvicorn's event loop exists). Call init_travel_graph() from FastAPI's
+# lifespan startup instead, and call close_travel_graph() on shutdown.
+
 DATABASE_URL = get_database_url()
 
-pool = ConnectionPool(
-    DATABASE_URL,
-    max_size=10,
-    kwargs={
-        "autocommit": True,
-        "row_factory": dict_row
-    }
-)
+pool: AsyncConnectionPool | None = None
+checkpointer: AsyncPostgresSaver | None = None
+travel_graph = None
 
-checkpointer = PostgresSaver(pool)
-checkpointer.setup()
 
-travel_graph = graph.compile(checkpointer=checkpointer)
+async def init_travel_graph():
+    """Call this once from FastAPI's lifespan startup."""
+    global pool, checkpointer, travel_graph
 
+    pool = AsyncConnectionPool(
+        DATABASE_URL,
+        max_size=10,
+        kwargs={
+            "autocommit": True,
+            "row_factory": dict_row,
+        },
+        open=False,
+    )
+    await pool.open()
+
+    checkpointer = AsyncPostgresSaver(pool)
+    await checkpointer.setup()
+
+    travel_graph = graph.compile(checkpointer=checkpointer)
+
+
+async def close_travel_graph():
+    """Call this from FastAPI's lifespan shutdown."""
+    global pool
+    if pool is not None:
+        await pool.close()
 
 
 # =========================
 # Function for FastAPI
 # =========================
 
-def run_travel_agent(user_input: str, thread_id: str | None = None):
+async def run_travel_agent(user_input: str, thread_id: str | None = None):
+    if travel_graph is None:
+        raise RuntimeError(
+            "travel_graph is not initialized. Did you forget to call "
+            "init_travel_graph() on startup?"
+        )
+
     if not thread_id:
         thread_id = f"user_{uuid.uuid4().hex}"
 
@@ -243,7 +263,7 @@ def run_travel_agent(user_input: str, thread_id: str | None = None):
         }
     }
 
-    result = travel_graph.invoke(
+    result = await travel_graph.ainvoke(
         {
             "messages": [
                 HumanMessage(content=user_input)

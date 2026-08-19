@@ -1,4 +1,5 @@
 from pathlib import Path
+from contextlib import asynccontextmanager
 import traceback
 import uvicorn
 
@@ -8,14 +9,26 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from backend import run_travel_agent
+from backend import run_travel_agent, init_travel_graph, close_travel_graph
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: open the async pool + build the checkpointer/graph
+    # now that uvicorn's event loop is running.
+    await init_travel_graph()
+    yield
+    # Shutdown: close the pool cleanly.
+    await close_travel_graph()
+
 
 app = FastAPI(
     title="Tripora",
     description="LangGraph Multi-Agent Travel Planner with FastAPI Frontend",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -31,11 +44,9 @@ templates = Jinja2Templates(
 )
 
 
-
 class TravelRequest(BaseModel):
     message: str
     thread_id: str | None = None
-
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -61,7 +72,7 @@ async def travel_planner(request_data: TravelRequest):
                 }
             )
 
-        result = run_travel_agent(
+        result = await run_travel_agent(
             user_input=user_message,
             thread_id=request_data.thread_id
         )
@@ -91,7 +102,6 @@ async def travel_planner(request_data: TravelRequest):
         )
 
 
-
 @app.get("/health")
 async def health_check():
     return {
@@ -103,7 +113,6 @@ async def health_check():
 @app.get("/favicon.ico")
 async def favicon():
     return JSONResponse(content={})
-
 
 
 if __name__ == "__main__":
